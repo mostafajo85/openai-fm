@@ -16,6 +16,8 @@ export interface AppState {
   selectedEntry: LibraryEntry | null;
   librarySet: LibraryEntry[];
   latestAudioUrl: string | null;
+  speed: number;
+  format: 'mp3' | 'wav' | 'opus';
 }
 
 const INITIAL_STATE: AppState = {
@@ -27,6 +29,8 @@ const INITIAL_STATE: AppState = {
   selectedEntry: null,
   librarySet: [],
   latestAudioUrl: null,
+  speed: 1.0,
+  format: 'mp3',
 };
 
 class AppStore {

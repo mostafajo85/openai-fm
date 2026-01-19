@@ -25,6 +25,7 @@ const nextConfig: NextConfig = {
     },
   },
   devIndicators: false,
+  output: 'standalone', // For Docker deployment
 
   // Apply the same SVG transform to the webpack-based production build
   webpack(config) {
@@ -50,7 +51,27 @@ const nextConfig: NextConfig = {
       });
     }
 
-    return [{ source: "/(.*)", headers }];
+    // CORS configuration
+    const corsHeaders = [
+      {
+        key: "Access-Control-Allow-Origin",
+        value: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+      },
+      {
+        key: "Access-Control-Allow-Methods",
+        value: "GET, POST, OPTIONS",
+      },
+      {
+        key: "Access-Control-Allow-Headers",
+        value: "Content-Type, Authorization",
+      },
+      {
+        key: "Access-Control-Max-Age",
+        value: "86400", // 24 hours
+      },
+    ];
+
+    return [{ source: "/(.*)", headers: [...headers, ...corsHeaders] }];
   },
 };
 

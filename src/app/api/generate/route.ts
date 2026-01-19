@@ -1,129 +1,115 @@
-import { NextRequest, userAgent } from "next/server";
+import { NextRequest } from 'next/server';
+import { ttsService } from '@/services/tts.service';
+import { validateAndSanitize } from '@/services/validation.service';
+import { quotaService } from '@/services/quota.service';
+import { getUserIdFromCookie, createUserId } from '@/services/user.service';
+import { ipRateLimiter, getClientIP } from '@/middleware/rate-limiter';
+import { AppError, formatErrorResponse, logError } from '@/lib/errors';
 
-export const MAX_INPUT_LENGTH = 1000;
-export const MAX_PROMPT_LENGTH = 1000;
-
-// GET handler that proxies requests to the OpenAI TTS API and streams
-// the response back to the client.
-import { VOICES } from "@/lib/library";
-export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-
-  const ua = userAgent(req);
-  const response_format = ua.engine?.name === "Blink" ? "wav" : "mp3";
-
-  // Get parameters from the query string
-  let input = searchParams.get("input") || "";
-  let prompt = searchParams.get("prompt") || "";
-  const voice = searchParams.get("voice") || "";
-  const vibe = searchParams.get("vibe") || "audio";
-
-  // Truncate input and prompt to max 1000 characters
-  // Frontend handles this, but we'll do it here too
-  // to avoid extra requests to the server
-  input = input.slice(0, MAX_INPUT_LENGTH);
-  prompt = prompt.slice(0, MAX_PROMPT_LENGTH);
-
-  if (!VOICES.includes(voice)) {
-    return new Response("Invalid voice", { status: 400 });
-  }
-
+/**
+ * Generate speech from text using OpenAI TTS API
+ * Supports both GET and POST methods
+ */
+async function handleRequest(req: NextRequest): Promise<Response> {
   try {
-    const apiResponse = await fetch("https://api.openai.com/v1/audio/speech", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini-tts",
-        input,
-        response_format,
-        voice,
-        // Don't pass if empty
-        ...(prompt && { instructions: prompt }),
-      }),
+    // Rate limiting by IP
+    const clientIP = getClientIP(req);
+    await ipRateLimiter.check(clientIP);
+
+    // Extract parameters from request
+    let input: string;
+    let voice: string;
+    let speed: number | undefined;
+    let format: string | undefined;
+    let instructions: string | undefined;
+
+    if (req.method === 'GET') {
+      const { searchParams } = new URL(req.url);
+      input = searchParams.get('input') || '';
+      voice = searchParams.get('voice') || '';
+      speed = searchParams.get('speed') ? parseFloat(searchParams.get('speed')!) : undefined;
+      format = searchParams.get('format') || undefined;
+      instructions = searchParams.get('prompt') || undefined;
+    } else {
+      // POST method
+      const formData = await req.formData();
+      input = formData.get('input')?.toString() || '';
+      voice = formData.get('voice')?.toString() || '';
+      speed = formData.get('speed') ? parseFloat(formData.get('speed')!.toString()) : undefined;
+      format = formData.get('format')?.toString() || undefined;
+      instructions = formData.get('prompt')?.toString() || undefined;
+    }
+
+    // Validate and sanitize all inputs
+    const validated = validateAndSanitize({
+      input,
+      voice,
+      speed,
+      format,
+      instructions,
     });
-    if (!apiResponse.ok) {
-      return new Response(`An error occurred while generating the audio.`, {
-        status: apiResponse.status,
+
+    // Get user ID from cookie for quota tracking
+    const cookieHeader = req.headers.get('cookie');
+    const userId = cookieHeader ? getUserIdFromCookie(cookieHeader) : createUserId();
+
+    // Check quota before processing (if monetization is enabled)
+    quotaService.checkQuota(userId, validated.characterCount);
+
+    // Generate speech using TTS service
+    const result = await ttsService.generateSpeech({
+      input: validated.input,
+      voice: validated.voice,
+      speed: validated.speed,
+      format: validated.format,
+      instructions: validated.instructions,
+    });
+
+    // Consume quota after successful generation
+    quotaService.consumeQuota(userId, validated.characterCount);
+
+    // Return audio stream
+    return new Response(result.audio, {
+      headers: {
+        'Content-Type': result.contentType,
+        'Content-Disposition': `inline; filename="${result.filename}"`,
+        'Cache-Control': 'no-cache',
+        'X-Character-Count': validated.characterCount.toString(),
+        'X-Language': validated.language,
+      },
+    });
+  } catch (error) {
+    // Handle errors
+    if (error instanceof AppError) {
+      return Response.json(formatErrorResponse(error), {
+        status: error.statusCode,
       });
     }
 
-    const filename = `openai-fm-${voice}-${vibe}.${response_format}`;
+    // Log unexpected errors
+    logError(error as Error, {
+      endpoint: '/api/generate',
+      method: req.method,
+    });
 
-    // Stream response back to client.
-    return new Response(apiResponse.body, {
-      headers: {
-        "Content-Type": response_format === "wav" ? "audio/wav" : "audio/mpeg",
-        "Content-Disposition": `inline; filename="${filename}"`,
-        "Cache-Control": "no-cache",
+    return Response.json(
+      {
+        error: {
+          message: 'An unexpected error occurred',
+          code: 'INTERNAL_ERROR',
+          statusCode: 500,
+        },
       },
-    });
-  } catch (err) {
-    console.error("Error generating speech:", err);
-    return new Response("Error generating speech", {
-      status: 500,
-    });
+      { status: 500 }
+    );
   }
+}
+
+export async function GET(req: NextRequest) {
+  return handleRequest(req);
 }
 
 export async function POST(req: NextRequest) {
-  const ua = userAgent(req);
-  const response_format = ua.engine?.name === "Blink" ? "wav" : "mp3";
-
-  const formData = await req.formData();
-  let input = formData.get("input")?.toString() || "";
-  let prompt = formData.get("prompt")?.toString() || "";
-  const voice = formData.get("voice")?.toString() || "";
-  const vibe = formData.get("vibe") || "audio";
-
-  // Truncate input and prompt to max 1000 characters
-  // Frontend handles this, but we'll do it here too
-  // to avoid extra requests to the server
-  input = input.slice(0, MAX_INPUT_LENGTH);
-  prompt = prompt.slice(0, MAX_PROMPT_LENGTH);
-
-  if (!VOICES.includes(voice)) {
-    return new Response("Invalid voice", { status: 400 });
-  }
-
-  try {
-    const apiResponse = await fetch("https://api.openai.com/v1/audio/speech", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini-tts",
-        input,
-        response_format,
-        voice,
-        // Don't pass if empty
-        ...(prompt && { instructions: prompt }),
-      }),
-    });
-    if (!apiResponse.ok) {
-      return new Response(`An error occurred while generating the audio.`, {
-        status: apiResponse.status,
-      });
-    }
-
-    const filename = `openai-fm-${voice}-${vibe}.${response_format}`;
-
-    // Stream response back to client.
-    return new Response(apiResponse.body, {
-      headers: {
-        "Content-Type": response_format === "wav" ? "audio/wav" : "audio/mpeg",
-        "Content-Disposition": `inline; filename="${filename}"`,
-        "Cache-Control": "no-cache",
-      },
-    });
-  } catch (err) {
-    console.error("Error generating speech:", err);
-    return new Response("Error generating speech", {
-      status: 500,
-    });
-  }
+  return handleRequest(req);
 }
+
