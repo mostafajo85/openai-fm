@@ -27,6 +27,7 @@ export async function GET() {
                 status: openaiHealthy ? 200 : 503,
             }
         );
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (_error) {
         return Response.json(
             {
