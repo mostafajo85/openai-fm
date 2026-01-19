@@ -27,7 +27,7 @@ export async function GET() {
                 status: openaiHealthy ? 200 : 503,
             }
         );
-    } catch (error) {
+    } catch (_error) {
         return Response.json(
             {
                 status: 'down',

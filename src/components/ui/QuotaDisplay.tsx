@@ -50,10 +50,10 @@ export function QuotaDisplay({
                 <div className="h-2 bg-background rounded-full overflow-hidden">
                     <div
                         className={`h-full transition-all duration-300 ${isDanger
-                                ? 'bg-red-500'
-                                : isWarning
-                                    ? 'bg-yellow-500'
-                                    : 'bg-primary'
+                            ? 'bg-red-500'
+                            : isWarning
+                                ? 'bg-yellow-500'
+                                : 'bg-primary'
                             }`}
                         style={{ width: `${Math.min(percentage, 100)}%` }}
                     />
@@ -78,7 +78,7 @@ export function QuotaDisplay({
             )}
             {isWarning && !isDanger && (
                 <div className="mt-3 p-2 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded text-xs text-yellow-700 dark:text-yellow-300">
-                    ⚡ You're using {Math.round(percentage)}% of your monthly quota.
+                    ⚡ You&apos;re using {Math.round(percentage)}% of your monthly quota.
                 </div>
             )}
 

@@ -52,9 +52,9 @@ async function handleRequest(req: NextRequest): Promise<Response> {
       instructions,
     });
 
-    // Get user ID from cookie for quota tracking
+    // Get user ID from cookie for quota tracking (ensure always a string)
     const cookieHeader = req.headers.get('cookie');
-    const userId = cookieHeader ? getUserIdFromCookie(cookieHeader) : createUserId();
+    const userId = getUserIdFromCookie(cookieHeader) || createUserId();
 
     // Check quota before processing (if monetization is enabled)
     quotaService.checkQuota(userId, validated.characterCount);
