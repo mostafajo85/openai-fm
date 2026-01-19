@@ -21,14 +21,16 @@ export interface TTSResponse {
 }
 
 class TTSService {
-    private apiKey: string;
-
-    constructor() {
-        const apiKey = process.env.OPENAI_API_KEY;
-        if (!apiKey) {
+    private get apiKey(): string {
+        const key = process.env.OPENAI_API_KEY;
+        if (!key) {
             throw new Error('OPENAI_API_KEY is not configured');
         }
-        this.apiKey = apiKey;
+        return key;
+    }
+
+    constructor() {
+        // Lazy initialization - validation happens on first use
     }
 
     /**
