@@ -24,7 +24,7 @@ class TTSService {
     private get apiKey(): string {
         const key = process.env.OPENAI_API_KEY;
         if (!key) {
-            throw new Error('OPENAI_API_KEY is not configured');
+            throw new OpenAIError('OPENAI_API_KEY is not configured', 503);
         }
         return key;
     }
