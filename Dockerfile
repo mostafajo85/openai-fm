@@ -22,8 +22,8 @@ COPY . .
 # Set environment to production
 ENV NODE_ENV=production
 
-# Build Next.js application
-RUN npm run build
+# Build Next.js application with explicit error handling
+RUN npm run build || (echo "━━━━ BUILD FAILED — SEE ERROR ABOVE ━━━━" && exit 1)
 
 # Production image, copy all the files and run next
 FROM base AS runner
