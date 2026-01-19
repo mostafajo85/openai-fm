@@ -1,3 +1,6 @@
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 import { NextRequest } from 'next/server';
 import { ttsService } from '@/services/tts.service';
 import { validateAndSanitize } from '@/services/validation.service';
